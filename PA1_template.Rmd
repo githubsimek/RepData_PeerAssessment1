@@ -1,25 +1,153 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
+title: "Quantified Self Activity Monitoring"
+output: html_document
+---  
+
+This report makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals throughout the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and includes the number of steps taken in 5 minute intervals each day.
+
+The variables included in this dataset are: 
+
+- **steps**: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+- **date**: The date on which the measurement was taken in YYYY-MM-DD format
+- **interval**: Identifier for the 5-minute interval in which measurement was taken
+
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+### Load the data
+
+```{r}
+all_activity <- read.csv("activity.csv", stringsAsFactors = FALSE)
+activity <- all_activity[complete.cases(all_activity),]
 
 
-## Loading and preprocessing the data
+```
+```{r echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(xtable)
+
+```
 
 
+### What is the mean total number of steps taken per day?
 
-## What is mean total number of steps taken per day?
++ Calculate the total number of steps, the mean and the median of the number of steps taken per day.  Ignore the missing values.
+
+```{r}
+activity_summary <- activity %>% 
+                    group_by(date) %>% 
+                    summarize(totalSteps = sum(steps), mean = mean(steps),
+                              median = median(steps))
+```
+
++ Make a histogram of the total number of steps taken per day.
+
+```{r}
+
+qplot(activity_summary$totalSteps, geom = "histogram", 
+                                   binwidth = 1000, 
+                                   xlab = "Steps per Day",
+                                   main = "Histogram: Total Steps per Day",
+                                   fill = I("blue"),
+                                   alpha = I(0.5))
+```
+
++ Mean and median of the total number of steps taken per day
+
+```{r showtable, results="asis"}
+print(xtable(activity_summary[c("date", "mean", "median")]), type="html")
+```
+
+### Average Daily Activity Pattern
+
++ Average number of steps per 5-minte interval across all days and plot
+
+```{r}
+interval_avg <- activity %>%
+                group_by(interval) %>%
+                summarize(mean = mean(steps))
+qplot(interval_avg$interval, interval_avg$mean,
+                          type = "1",
+                          xlab="Interval",
+                          ylab="Average Number of Steps",
+                          main = "Average Number of Steps per 5-Minute Interval",
+                          col=I('blue'),
+                          alpha = I(0.5))
+ 
+```
 
 
+```{r results="hide"}
+result <- interval_avg[interval_avg$mean == max(interval_avg$mean),]
+```
++ 5-minute interval with the maximum average number of steps is `r result$interval`.  
++ The maximum average number of steps is `r result$mean`.
 
-## What is the average daily activity pattern?
+### Inputing Missing Values
+
+```{r results = "hide"}
+nas <- sum(is.na(all_activity))
+```
++ Total number of missing values in the dataset is `r nas`.
+
++ Create a new dataset with the missing values substituted with the rounded mean for the 5-minute interval.
+
+```{r message=FALSE}
+
+estimated_activity <- inner_join(all_activity, interval_avg) %>% 
+                                 select(date, interval, mean) %>% 
+                                 mutate(steps = round(mean) )
+```
+
++ Make a histogram of the total number of steps taken per day.
+
+```{r}
+estimated_summary <- estimated_activity %>%
+                group_by(interval) %>%
+                summarize(totalSteps = sum(steps), mean = mean(steps), median = median(steps))
+
+qplot(estimated_summary$totalSteps, geom = "histogram", 
+                                   binwidth = 1000, 
+                                   xlab = "Steps per Day",
+                                   main = "Histogram: Estimated Total Steps per Day",
+                                   fill = I("blue"),
+                                   alpha = I(0.5))
+```
+
++ Mean and median of the total number of steps taken per day
+
+```{r  results="asis"}
+print(xtable(activity_summary[c("date", "mean", "median")]), type="html")
+```
+
++ Estimating the step values for every interval skewed the total steps per day average all the way to the left. Most 5-minute intervals have 0-1000 steps. The median hasn't changed.
 
 
+### Activity patterns for weekdays and weekends
 
-## Imputing missing values
++ Create a factor variable with two levels - weekday and weekend - using the filled-in missing values dataset
+
+```{r}
+activity_weekdays <- estimated_activity %>% 
+     mutate(weekdays = weekdays(as.Date(estimated_activity$date), abbreviate = TRUE))
+ 
+
+activity_weekdays$weekdays[activity_weekdays$weekdays  %in% c("Sun", "Sat")] <- "weekend"
+activity_weekdays$weekdays[activity_weekdays$weekdays %in% c("Mon", "Tue", "Wed", "Thu", "Fri")] <- "weekday"
+
+weekdays_summary <- activity_weekdays %>%
+                    group_by(weekdays, interval) %>%
+                    summarize( mean = mean(steps))
+```
 
 
++ Plot of a time series of the 5-minute intervals and the average number of steps averaged accross all weekday and weekend days
 
-## Are there differences in activity patterns between weekdays and weekends?
+```{r results='asis'}
+g <- ggplot(data = weekdays_summary, aes(interval, mean)) + geom_line(color = "blue", fill="0.5") + facet_wrap(~weekdays, nrow=2)
+
+g
+```
+
+
++ 
